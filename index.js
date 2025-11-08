@@ -1,36 +1,17 @@
-'use strict'
+const url = require('url')
 
-const { promisify } = require('util')
+const node = require('../node.js')
+const polyfill = require('./polyfill.js')
 
-const handler = {
-  get: function (target, prop, receiver) {
-    if (typeof target[prop] !== 'function') {
-      return target[prop]
-    }
-    if (target[prop][promisify.custom]) {
-      return function () {
-        return Reflect.get(target, prop, receiver)[promisify.custom].apply(target, arguments)
-      }
-    }
-    return function () {
-      return new Promise((resolve, reject) => {
-        Reflect.get(target, prop, receiver).apply(target, [...arguments, function (err, result) {
-          if (err) {
-            return reject(err)
-          }
-          resolve(result)
-        }])
-      })
-    }
-  }
+const useNative = node.satisfies('>=10.12.0')
+
+const fileURLToPath = (path) => {
+  // the polyfill is tested separately from this module, no need to hack
+  // process.version to try to trigger it just for coverage
+  // istanbul ignore next
+  return useNative
+    ? url.fileURLToPath(path)
+    : polyfill(path)
 }
 
-module.exports = function (thingToPromisify) {
-  if (typeof thingToPromisify === 'function') {
-    return promisify(thingToPromisify)
-  }
-  if (typeof thingToPromisify === 'object') {
-    return new Proxy(thingToPromisify, handler)
-  }
-  throw new TypeError('Can only promisify functions or objects')
-}
+module.exports = fileURLToPath
